@@ -1,13 +1,9 @@
-import Navbar from "../components/Navbar"
-
 import heroImage from "../assets/hero.png"; 
 
 
 function Home() {
     return (
         <div>
-            <Navbar />
-
             <main className="hero">
                 <div className="hero-content">
                     <h1>Welcome to our <span>Marketplace</span></h1>
