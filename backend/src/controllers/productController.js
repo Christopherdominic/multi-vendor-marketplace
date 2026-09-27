@@ -4,7 +4,10 @@ const AppError = require('../utils/appError');
 const sendSuccess = require('../utils/response');
 const uploadBufferToCloudinary = require('../utils/uploadToCloudinary');
 const deleteFromCloudinary = require('../utils/deleteFromCloudinary');
-const { formatProductSummary, formatProductDetail } = require('../utils/formatProduct');
+const {
+  formatProductSummary,
+  formatProductDetail,
+} = require('../utils/formatProduct');
 
 const SORT_OPTIONS = {
   newest: '-createdAt',
@@ -28,6 +31,7 @@ exports.createProduct = async (req, res, next) => {
   const uploadResults = await Promise.all(
     req.files.map((file) => uploadBufferToCloudinary(file.buffer))
   );
+
   const images = uploadResults.map((result) => result.secure_url);
   const imagePublicIds = uploadResults.map((result) => result.public_id);
 
@@ -44,11 +48,25 @@ exports.createProduct = async (req, res, next) => {
 
   product.category = categoryExists;
 
-  sendSuccess(res, 201, 'Product created successfully', formatProductDetail(product));
+  sendSuccess(
+    res,
+    201,
+    'Product created successfully',
+    formatProductDetail(product)
+  );
 };
 
 exports.getProducts = async (req, res, next) => {
-  const { category, minPrice, maxPrice, minRating, inStock, search, sort, vendor } = req.query;
+  const {
+    category,
+    minPrice,
+    maxPrice,
+    minRating,
+    inStock,
+    search,
+    sort,
+    vendor,
+  } = req.query;
 
   const filter = { isActive: true };
 
@@ -57,6 +75,7 @@ exports.getProducts = async (req, res, next) => {
 
   if (minPrice || maxPrice) {
     filter.price = {};
+
     if (minPrice) filter.price.$gte = Number(minPrice);
     if (maxPrice) filter.price.$lte = Number(maxPrice);
   }
@@ -70,17 +89,23 @@ exports.getProducts = async (req, res, next) => {
   }
 
   if (search) {
-    filter.name = { $regex: search, $options: 'i' };
+    filter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } },
+    ];
   }
 
   const sortBy = SORT_OPTIONS[sort] || SORT_OPTIONS.newest;
-
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 12));
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
   const skip = (page - 1) * limit;
 
   const [products, total] = await Promise.all([
-    Product.find(filter).sort(sortBy).skip(skip).limit(limit).populate('category', 'name'),
+    Product.find(filter)
+      .sort(sortBy)
+      .skip(skip)
+      .limit(limit)
+      .populate('category', 'name'),
     Product.countDocuments(filter),
   ]);
 
@@ -96,7 +121,10 @@ exports.getProducts = async (req, res, next) => {
 };
 
 exports.getProduct = async (req, res, next) => {
-  const product = await Product.findById(req.params.id).populate('category', 'name');
+  const product = await Product.findById(req.params.id).populate(
+    'category',
+    'name'
+  );
 
   if (!product || !product.isActive) {
     return next(new AppError('Product not found', 404));
@@ -121,12 +149,22 @@ exports.updateProduct = async (req, res, next) => {
     .select('+imagePublicIds')
     .populate('category', 'name');
 
-  if (!product) {
+  if (!product || !product.isActive) {
     return next(new AppError('Product not found', 404));
   }
 
   if (product.vendor.toString() !== req.user.id) {
-    return next(new AppError('You can only update your own products', 403));
+    return next(
+      new AppError('You can only update your own products', 403)
+    );
+  }
+
+  if (req.body.category !== undefined) {
+    const categoryExists = await Category.findById(req.body.category);
+
+    if (!categoryExists) {
+      return next(new AppError('Category not found', 404));
+    }
   }
 
   if (req.files && req.files.length > 0) {
@@ -138,7 +176,10 @@ exports.updateProduct = async (req, res, next) => {
       try {
         await deleteFromCloudinary(product.imagePublicIds);
       } catch (err) {
-        console.error('Failed to delete old product images from Cloudinary:', err.message);
+        console.error(
+          'Failed to delete old product images from Cloudinary:',
+          err.message
+        );
       }
     }
 
@@ -146,7 +187,14 @@ exports.updateProduct = async (req, res, next) => {
     product.imagePublicIds = uploadResults.map((result) => result.public_id);
   }
 
-  const allowedFields = ['name', 'description', 'price', 'stock', 'category'];
+  const allowedFields = [
+    'name',
+    'description',
+    'price',
+    'stock',
+    'category',
+  ];
+
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
       product[field] = req.body[field];
@@ -156,29 +204,29 @@ exports.updateProduct = async (req, res, next) => {
   await product.save();
   await product.populate('category', 'name');
 
-  sendSuccess(res, 200, 'Product updated successfully', formatProductDetail(product));
+  sendSuccess(
+    res,
+    200,
+    'Product updated successfully',
+    formatProductDetail(product)
+  );
 };
 
 exports.deleteProduct = async (req, res, next) => {
-  const product = await Product.findById(req.params.id).select('+imagePublicIds');
+  const product = await Product.findById(req.params.id);
 
-  if (!product) {
+  if (!product || !product.isActive) {
     return next(new AppError('Product not found', 404));
   }
 
   if (product.vendor.toString() !== req.user.id) {
-    return next(new AppError('You can only delete your own products', 403));
+    return next(
+      new AppError('You can only delete your own products', 403)
+    );
   }
 
-  if (product.imagePublicIds && product.imagePublicIds.length > 0) {
-    try {
-      await deleteFromCloudinary(product.imagePublicIds);
-    } catch (err) {
-      console.error('Failed to delete product images from Cloudinary:', err.message);
-    }
-  }
-
-  await product.deleteOne();
+  product.isActive = false;
+  await product.save();
 
   sendSuccess(res, 200, 'Product deleted successfully', null);
 };
