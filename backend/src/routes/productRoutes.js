@@ -22,16 +22,13 @@ const productValidationRules = [
 ];
 
 const productQueryValidationRules = [
-  query('category').optional().isMongoId().withMessage('Category id must be valid'),
-  query('vendor').optional().isMongoId().withMessage('Vendor id must be valid'),
-  query('minPrice').optional().isFloat({ min: 0 }).withMessage('Minimum price must be a positive number'),
-  query('maxPrice').optional().isFloat({ min: 0 }).withMessage('Maximum price must be a positive number'),
-  query('minRating')
-    .optional()
-    .isFloat({ min: 0, max: 5 })
-    .withMessage('Minimum rating must be between 0 and 5'),
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
+  query('category').optional().isMongoId().withMessage('category must be a valid id'),
+  query('vendor').optional().isMongoId().withMessage('vendor must be a valid id'),
+  query('minPrice').optional().isFloat({ min: 0 }).withMessage('minPrice must be a positive number'),
+  query('maxPrice').optional().isFloat({ min: 0 }).withMessage('maxPrice must be a positive number'),
+  query('minRating').optional().isFloat({ min: 0, max: 5 }).withMessage('minRating must be between 0 and 5'),
+  query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive whole number'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('limit must be between 1 and 50'),
 ];
 
 router.post(
