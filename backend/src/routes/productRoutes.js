@@ -7,9 +7,9 @@ const {
   updateProduct,
   deleteProduct,
 } = require('../controllers/productController');
-const { protect, restrictTo } = require('../middleware/auth');
-const validate = require('../middleware/validate');
-const upload = require('../middleware/upload');
+const { protect, restrictTo } = require('../middlewares/auth');
+const validate = require('../middlewares/validate');
+const upload = require('../middlewares/upload');
 
 const router = express.Router();
 
