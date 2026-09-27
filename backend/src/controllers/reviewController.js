@@ -25,6 +25,10 @@ const recalculateProductRating = async (productId) => {
 exports.createReview = async (req, res, next) => {
   const { product: productId, rating, comment } = req.body;
 
+  if (req.user.role !== 'customer') {
+    return next(new AppError('Only customers can submit product reviews', 403));
+  }
+
   const product = await Product.findById(productId);
   if (!product || !product.isActive) {
     return next(new AppError('Product not found', 404));

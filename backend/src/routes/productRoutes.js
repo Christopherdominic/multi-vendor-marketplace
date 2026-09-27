@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const {
   createProduct,
   getProducts,
@@ -21,6 +21,19 @@ const productValidationRules = [
   body('category').isMongoId().withMessage('A valid category id is required'),
 ];
 
+const productQueryValidationRules = [
+  query('category').optional().isMongoId().withMessage('Category id must be valid'),
+  query('vendor').optional().isMongoId().withMessage('Vendor id must be valid'),
+  query('minPrice').optional().isFloat({ min: 0 }).withMessage('Minimum price must be a positive number'),
+  query('maxPrice').optional().isFloat({ min: 0 }).withMessage('Maximum price must be a positive number'),
+  query('minRating')
+    .optional()
+    .isFloat({ min: 0, max: 5 })
+    .withMessage('Minimum rating must be between 0 and 5'),
+  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
+];
+
 router.post(
   '/',
   protect,
@@ -31,7 +44,7 @@ router.post(
   createProduct
 );
 
-router.get('/', getProducts);
+router.get('/', productQueryValidationRules, validate, getProducts);
 
 router.get(
   '/:id',

@@ -5,7 +5,7 @@ const {
   getProductReviews,
   deleteReview,
 } = require('../controllers/reviewController');
-const { protect } = require('../middlewares/auth');
+const { protect, restrictTo } = require('../middlewares/auth');
 const validate = require('../middlewares/validate');
 
 const router = express.Router();
@@ -13,6 +13,7 @@ const router = express.Router();
 router.post(
   '/',
   protect,
+  restrictTo('customer'),
   [
     body('product').isMongoId().withMessage('A valid product id is required'),
     body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),

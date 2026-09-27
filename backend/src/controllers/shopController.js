@@ -36,6 +36,18 @@ exports.getShop = async (req, res, next) => {
   sendSuccess(res, 200, 'Shop fetched successfully', formatShop(shop, { productCount }));
 };
 
+exports.getShopByVendorId = async (req, res, next) => {
+  const shop = await Shop.findOne({ owner: req.params.vendorId });
+
+  if (!shop || !shop.isActive) {
+    return next(new AppError('Shop not found', 404));
+  }
+
+  const productCount = await Product.countDocuments({ vendor: shop.owner, isActive: true });
+
+  sendSuccess(res, 200, 'Shop fetched successfully', formatShop(shop, { productCount }));
+};
+
 exports.updateMyShop = async (req, res, next) => {
   const shop = await Shop.findOne({ owner: req.user.id });
 
