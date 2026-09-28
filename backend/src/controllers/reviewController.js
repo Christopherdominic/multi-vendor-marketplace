@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Review = require('../models/review');
 const Product = require('../models/product');
 const AppError = require('../utils/appError');
@@ -5,8 +6,12 @@ const sendSuccess = require('../utils/response');
 const formatReview = require('../utils/formatReview');
 
 const recalculateProductRating = async (productId) => {
+  const productObjectId = mongoose.Types.ObjectId.isValid(productId)
+    ? new mongoose.Types.ObjectId(productId)
+    : productId;
+
   const stats = await Review.aggregate([
-    { $match: { product: productId } },
+    { $match: { product: productObjectId } },
     {
       $group: {
         _id: '$product',
@@ -16,7 +21,7 @@ const recalculateProductRating = async (productId) => {
     },
   ]);
 
-  await Product.findByIdAndUpdate(productId, {
+  await Product.findByIdAndUpdate(productObjectId, {
     ratingsAverage: stats.length > 0 ? Math.round(stats[0].avgRating * 10) / 10 : 0,
     ratingsCount: stats.length > 0 ? stats[0].count : 0,
   });
@@ -40,13 +45,13 @@ exports.createReview = async (req, res, next) => {
   }
 
   const review = await Review.create({
-    product: productId,
+    product: product._id,
     user: req.user.id,
     rating,
     comment,
   });
 
-  await recalculateProductRating(productId);
+  await recalculateProductRating(product._id);
 
   sendSuccess(res, 201, 'Review submitted successfully', formatReview(review));
 };

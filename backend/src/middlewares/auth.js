@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/user');
+const userModel = require('../models/user');
+const { resolveUserModel } = require('../utils/modelCompat');
 const AppError = require('../utils/appError');
+
+const User = resolveUserModel(userModel);
 
 // Temporary JWT auth guard, pending Backend Dev 1's full auth
 // implementation. Verifies a bearer token and attaches the user to

@@ -1,8 +1,11 @@
-const User = require('../models/user');
+const userModel = require('../models/user');
 const Shop = require('../models/shop');
 const Product = require('../models/product');
 const AppError = require('../utils/appError');
 const sendSuccess = require('../utils/response');
+const { resolveUserModel } = require('../utils/modelCompat');
+
+const SafeUser = resolveUserModel(userModel);
 
 const paginationParams = (req) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -18,8 +21,8 @@ exports.getVendors = async (req, res, next) => {
   if (req.query.status === 'inactive') filter.isActive = false;
 
   const [vendors, total] = await Promise.all([
-    User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
-    User.countDocuments(filter),
+    SafeUser.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    SafeUser.countDocuments(filter),
   ]);
 
   const shops = await Shop.find({ owner: { $in: vendors.map((vendor) => vendor.id) } });
@@ -49,8 +52,8 @@ exports.getCustomers = async (req, res, next) => {
   const filter = { role: 'customer' };
 
   const [customers, total] = await Promise.all([
-    User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
-    User.countDocuments(filter),
+    SafeUser.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    SafeUser.countDocuments(filter),
   ]);
 
   sendSuccess(res, 200, 'Customers fetched successfully', {
@@ -68,7 +71,7 @@ exports.getCustomers = async (req, res, next) => {
 exports.updateVendorStatus = async (req, res, next) => {
   const { isActive } = req.body;
 
-  const vendor = await User.findOne({ _id: req.params.id, role: 'vendor' });
+  const vendor = await SafeUser.findOne({ _id: req.params.id, role: 'vendor' });
   if (!vendor) {
     return next(new AppError('Vendor not found', 404));
   }
@@ -76,7 +79,10 @@ exports.updateVendorStatus = async (req, res, next) => {
   vendor.isActive = isActive;
   await vendor.save();
 
-  await Shop.findOneAndUpdate({ owner: vendor.id }, { isActive });
+  await Promise.all([
+    Shop.findOneAndUpdate({ owner: vendor.id }, { isActive }),
+    Product.updateMany({ vendor: vendor.id }, { isActive }),
+  ]);
 
   sendSuccess(res, 200, `Vendor ${isActive ? 'activated' : 'deactivated'} successfully`, {
     id: vendor.id,
@@ -86,9 +92,9 @@ exports.updateVendorStatus = async (req, res, next) => {
 
 exports.getAnalytics = async (req, res, next) => {
   const [totalUsers, totalVendors, totalCustomers, totalShops, totalProducts] = await Promise.all([
-    User.countDocuments(),
-    User.countDocuments({ role: 'vendor' }),
-    User.countDocuments({ role: 'customer' }),
+    SafeUser.countDocuments(),
+    SafeUser.countDocuments({ role: 'vendor' }),
+    SafeUser.countDocuments({ role: 'customer' }),
     Shop.countDocuments(),
     Product.countDocuments({ isActive: true }),
   ]);

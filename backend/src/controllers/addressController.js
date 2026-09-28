@@ -2,13 +2,11 @@ const Address = require('../models/address');
 const AppError = require('../utils/appError');
 const sendSuccess = require('../utils/response');
 const formatAddress = require('../utils/formatAddress');
+const { normalizeBooleanFlag } = require('../utils/modelCompat');
 
 exports.createAddress = async (req, res, next) => {
-  const { fullName, phone, street, city, state, country, isDefault } = req.body;
-
-  if (isDefault) {
-    await Address.updateMany({ user: req.user.id }, { isDefault: false });
-  }
+  const { fullName, phone, street, city, state, country } = req.body;
+  const shouldSetDefault = normalizeBooleanFlag(req.body.isDefault);
 
   const address = await Address.create({
     user: req.user.id,
@@ -18,8 +16,12 @@ exports.createAddress = async (req, res, next) => {
     city,
     state,
     country,
-    isDefault: !!isDefault,
+    isDefault: shouldSetDefault,
   });
+
+  if (shouldSetDefault) {
+    await Address.updateMany({ user: req.user.id, _id: { $ne: address._id } }, { isDefault: false });
+  }
 
   sendSuccess(res, 201, 'Address created successfully', formatAddress(address));
 };
@@ -36,21 +38,22 @@ exports.updateAddress = async (req, res, next) => {
     return next(new AppError('Address not found', 404));
   }
 
-  if (req.body.isDefault) {
-    await Address.updateMany(
-      { user: req.user.id, _id: { $ne: address.id } },
-      { isDefault: false }
-    );
-  }
-
+  const shouldSetDefault = normalizeBooleanFlag(req.body.isDefault);
   const allowedFields = ['fullName', 'phone', 'street', 'city', 'state', 'country', 'isDefault'];
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
-      address[field] = req.body[field];
+      address[field] = field === 'isDefault' ? shouldSetDefault : req.body[field];
     }
   });
 
   await address.save();
+
+  if (address.isDefault) {
+    await Address.updateMany(
+      { user: req.user.id, _id: { $ne: address._id } },
+      { isDefault: false }
+    );
+  }
 
   sendSuccess(res, 200, 'Address updated successfully', formatAddress(address));
 };

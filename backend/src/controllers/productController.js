@@ -1,13 +1,14 @@
+const userModel = require('../models/user');
 const Product = require('../models/product');
 const Category = require('../models/category');
 const AppError = require('../utils/appError');
 const sendSuccess = require('../utils/response');
 const uploadBufferToCloudinary = require('../utils/uploadToCloudinary');
 const deleteFromCloudinary = require('../utils/deleteFromCloudinary');
-const {
-  formatProductSummary,
-  formatProductDetail,
-} = require('../utils/formatProduct');
+const { formatProductSummary, formatProductDetail } = require('../utils/formatProduct');
+const { resolveUserModel } = require('../utils/modelCompat');
+
+const User = resolveUserModel(userModel);
 
 const SORT_OPTIONS = {
   newest: '-createdAt',
@@ -48,34 +49,48 @@ exports.createProduct = async (req, res, next) => {
 
   product.category = categoryExists;
 
-  sendSuccess(
-    res,
-    201,
-    'Product created successfully',
-    formatProductDetail(product)
-  );
+  sendSuccess(res, 201, 'Product created successfully', formatProductDetail(product));
 };
 
 exports.getProducts = async (req, res, next) => {
-  const {
-    category,
-    minPrice,
-    maxPrice,
-    minRating,
-    inStock,
-    search,
-    sort,
-    vendor,
-  } = req.query;
+  const { category, minPrice, maxPrice, minRating, inStock, search, sort, vendor } = req.query;
 
   const filter = { isActive: true };
 
+  const activeVendorIds = await User.find({ role: 'vendor', isActive: true }).distinct('_id');
+  if (activeVendorIds.length === 0) {
+    return sendSuccess(res, 200, 'Products fetched successfully', {
+      products: [],
+      pagination: {
+        total: 0,
+        page: 1,
+        pages: 1,
+        limit: 12,
+      },
+    });
+  }
+
   if (category) filter.category = category;
-  if (vendor) filter.vendor = vendor;
+  if (vendor) {
+    const vendorUser = await User.findById(vendor);
+    if (!vendorUser || !vendorUser.isActive) {
+      return sendSuccess(res, 200, 'Products fetched successfully', {
+        products: [],
+        pagination: {
+          total: 0,
+          page: 1,
+          pages: 1,
+          limit: 12,
+        },
+      });
+    }
+    filter.vendor = vendor;
+  } else {
+    filter.vendor = { $in: activeVendorIds };
+  }
 
   if (minPrice || maxPrice) {
     filter.price = {};
-
     if (minPrice) filter.price.$gte = Number(minPrice);
     if (maxPrice) filter.price.$lte = Number(maxPrice);
   }
@@ -101,11 +116,7 @@ exports.getProducts = async (req, res, next) => {
   const skip = (page - 1) * limit;
 
   const [products, total] = await Promise.all([
-    Product.find(filter)
-      .sort(sortBy)
-      .skip(skip)
-      .limit(limit)
-      .populate('category', 'name'),
+    Product.find(filter).sort(sortBy).skip(skip).limit(limit).populate('category', 'name'),
     Product.countDocuments(filter),
   ]);
 
@@ -121,12 +132,14 @@ exports.getProducts = async (req, res, next) => {
 };
 
 exports.getProduct = async (req, res, next) => {
-  const product = await Product.findById(req.params.id).populate(
-    'category',
-    'name'
-  );
+  const product = await Product.findById(req.params.id).populate('category', 'name');
 
   if (!product || !product.isActive) {
+    return next(new AppError('Product not found', 404));
+  }
+
+  const productVendor = await User.findById(product.vendor);
+  if (!productVendor || !productVendor.isActive) {
     return next(new AppError('Product not found', 404));
   }
 
@@ -154,9 +167,7 @@ exports.updateProduct = async (req, res, next) => {
   }
 
   if (product.vendor.toString() !== req.user.id) {
-    return next(
-      new AppError('You can only update your own products', 403)
-    );
+    return next(new AppError('You can only update your own products', 403));
   }
 
   if (req.body.category !== undefined) {
@@ -176,10 +187,7 @@ exports.updateProduct = async (req, res, next) => {
       try {
         await deleteFromCloudinary(product.imagePublicIds);
       } catch (err) {
-        console.error(
-          'Failed to delete old product images from Cloudinary:',
-          err.message
-        );
+        console.error('Failed to delete old product images from Cloudinary:', err.message);
       }
     }
 
@@ -187,14 +195,7 @@ exports.updateProduct = async (req, res, next) => {
     product.imagePublicIds = uploadResults.map((result) => result.public_id);
   }
 
-  const allowedFields = [
-    'name',
-    'description',
-    'price',
-    'stock',
-    'category',
-  ];
-
+  const allowedFields = ['name', 'description', 'price', 'stock', 'category'];
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
       product[field] = req.body[field];
@@ -204,12 +205,7 @@ exports.updateProduct = async (req, res, next) => {
   await product.save();
   await product.populate('category', 'name');
 
-  sendSuccess(
-    res,
-    200,
-    'Product updated successfully',
-    formatProductDetail(product)
-  );
+  sendSuccess(res, 200, 'Product updated successfully', formatProductDetail(product));
 };
 
 exports.deleteProduct = async (req, res, next) => {
@@ -220,9 +216,7 @@ exports.deleteProduct = async (req, res, next) => {
   }
 
   if (product.vendor.toString() !== req.user.id) {
-    return next(
-      new AppError('You can only delete your own products', 403)
-    );
+    return next(new AppError('You can only delete your own products', 403));
   }
 
   product.isActive = false;

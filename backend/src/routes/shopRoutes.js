@@ -12,6 +12,14 @@ const validate = require('../middlewares/validate');
 
 const router = express.Router();
 
+const shopUpdateValidationRules = [
+  body('name').optional().trim().notEmpty().withMessage('Shop name cannot be empty'),
+  body('description').optional().trim(),
+  body('logo').optional().isURL().withMessage('Logo must be a valid URL'),
+  body('contactEmail').optional().isEmail().withMessage('Contact email must be valid'),
+  body('contactPhone').optional().trim().notEmpty().withMessage('Contact phone cannot be empty'),
+];
+
 router.post(
   '/',
   protect,
@@ -23,7 +31,14 @@ router.post(
 
 router.get('/me/dashboard', protect, restrictTo('vendor'), getMyShopDashboard);
 
-router.patch('/me', protect, restrictTo('vendor'), updateMyShop);
+router.patch(
+  '/me',
+  protect,
+  restrictTo('vendor'),
+  shopUpdateValidationRules,
+  validate,
+  updateMyShop
+);
 
 router.get(
   '/vendor/:vendorId',

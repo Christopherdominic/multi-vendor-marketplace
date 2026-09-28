@@ -1,8 +1,12 @@
+const userModel = require('../models/user');
 const Shop = require('../models/shop');
 const Product = require('../models/product');
 const AppError = require('../utils/appError');
 const sendSuccess = require('../utils/response');
 const formatShop = require('../utils/formatShop');
+const { resolveUserModel } = require('../utils/modelCompat');
+
+const User = resolveUserModel(userModel);
 
 exports.registerShop = async (req, res, next) => {
   const existingShop = await Shop.findOne({ owner: req.user.id });
@@ -31,6 +35,11 @@ exports.getShop = async (req, res, next) => {
     return next(new AppError('Shop not found', 404));
   }
 
+  const shopOwner = await User.findById(shop.owner);
+  if (!shopOwner || !shopOwner.isActive) {
+    return next(new AppError('Shop not found', 404));
+  }
+
   const productCount = await Product.countDocuments({ vendor: shop.owner, isActive: true });
 
   sendSuccess(res, 200, 'Shop fetched successfully', formatShop(shop, { productCount }));
@@ -40,6 +49,11 @@ exports.getShopByVendorId = async (req, res, next) => {
   const shop = await Shop.findOne({ owner: req.params.vendorId });
 
   if (!shop || !shop.isActive) {
+    return next(new AppError('Shop not found', 404));
+  }
+
+  const shopOwner = await User.findById(shop.owner);
+  if (!shopOwner || !shopOwner.isActive) {
     return next(new AppError('Shop not found', 404));
   }
 
