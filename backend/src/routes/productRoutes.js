@@ -27,6 +27,7 @@ const productQueryValidationRules = [
   query('minPrice').optional().isFloat({ min: 0 }).withMessage('minPrice must be a positive number'),
   query('maxPrice').optional().isFloat({ min: 0 }).withMessage('maxPrice must be a positive number'),
   query('minRating').optional().isFloat({ min: 0, max: 5 }).withMessage('minRating must be between 0 and 5'),
+  query('search').optional().isLength({ max: 100 }).withMessage('search cannot exceed 100 characters'),
   query('page').optional().isInt({ min: 1 }).withMessage('page must be a positive whole number'),
   query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('limit must be between 1 and 50'),
 ];

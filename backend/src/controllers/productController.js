@@ -17,6 +17,39 @@ const SORT_OPTIONS = {
   rating: '-ratingsAverage',
 };
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const deleteUploadedImages = async (uploadResults, message) => {
+  const publicIds = uploadResults.map((result) => result.public_id);
+  if (publicIds.length === 0) return;
+
+  try {
+    await deleteFromCloudinary(publicIds);
+  } catch (err) {
+    console.error(message, err.message);
+  }
+};
+
+const uploadProductImages = async (files) => {
+  const results = await Promise.allSettled(
+    files.map((file) => uploadBufferToCloudinary(file.buffer))
+  );
+  const uploadResults = results
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value);
+  const failedUpload = results.find((result) => result.status === 'rejected');
+
+  if (failedUpload) {
+    await deleteUploadedImages(
+      uploadResults,
+      'Failed to clean up partially uploaded product images:'
+    );
+    throw failedUpload.reason;
+  }
+
+  return uploadResults;
+};
+
 exports.createProduct = async (req, res, next) => {
   const { name, description, price, stock, category } = req.body;
 
@@ -29,23 +62,30 @@ exports.createProduct = async (req, res, next) => {
     return next(new AppError('Category not found', 404));
   }
 
-  const uploadResults = await Promise.all(
-    req.files.map((file) => uploadBufferToCloudinary(file.buffer))
-  );
+  const uploadResults = await uploadProductImages(req.files);
 
   const images = uploadResults.map((result) => result.secure_url);
   const imagePublicIds = uploadResults.map((result) => result.public_id);
 
-  const product = await Product.create({
-    name,
-    description,
-    price,
-    stock,
-    category,
-    images,
-    imagePublicIds,
-    vendor: req.user.id,
-  });
+  let product;
+  try {
+    product = await Product.create({
+      name,
+      description,
+      price,
+      stock,
+      category,
+      images,
+      imagePublicIds,
+      vendor: req.user.id,
+    });
+  } catch (err) {
+    await deleteUploadedImages(
+      uploadResults,
+      'Failed to clean up product images after product creation failed:'
+    );
+    throw err;
+  }
 
   product.category = categoryExists;
 
@@ -103,10 +143,12 @@ exports.getProducts = async (req, res, next) => {
     filter.stock = { $gt: 0 };
   }
 
-  if (search) {
+  const searchTerm = typeof search === 'string' ? search.trim() : '';
+  if (searchTerm) {
+    const escapedSearch = escapeRegex(searchTerm);
     filter.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { description: { $regex: search, $options: 'i' } },
+      { name: { $regex: escapedSearch, $options: 'i' } },
+      { description: { $regex: escapedSearch, $options: 'i' } },
     ];
   }
 
@@ -178,21 +220,12 @@ exports.updateProduct = async (req, res, next) => {
     }
   }
 
+  const oldImagePublicIds = product.imagePublicIds || [];
+  let newUploadResults = [];
   if (req.files && req.files.length > 0) {
-    const uploadResults = await Promise.all(
-      req.files.map((file) => uploadBufferToCloudinary(file.buffer))
-    );
-
-    if (product.imagePublicIds && product.imagePublicIds.length > 0) {
-      try {
-        await deleteFromCloudinary(product.imagePublicIds);
-      } catch (err) {
-        console.error('Failed to delete old product images from Cloudinary:', err.message);
-      }
-    }
-
-    product.images = uploadResults.map((result) => result.secure_url);
-    product.imagePublicIds = uploadResults.map((result) => result.public_id);
+    newUploadResults = await uploadProductImages(req.files);
+    product.images = newUploadResults.map((result) => result.secure_url);
+    product.imagePublicIds = newUploadResults.map((result) => result.public_id);
   }
 
   const allowedFields = ['name', 'description', 'price', 'stock', 'category'];
@@ -202,7 +235,23 @@ exports.updateProduct = async (req, res, next) => {
     }
   });
 
-  await product.save();
+  try {
+    await product.save();
+  } catch (err) {
+    await deleteUploadedImages(
+      newUploadResults,
+      'Failed to clean up replacement product images after update failed:'
+    );
+    throw err;
+  }
+
+  if (newUploadResults.length > 0) {
+    await deleteUploadedImages(
+      oldImagePublicIds.map((public_id) => ({ public_id })),
+      'Failed to delete replaced product images from Cloudinary:'
+    );
+  }
+
   await product.populate('category', 'name');
 
   sendSuccess(res, 200, 'Product updated successfully', formatProductDetail(product));
