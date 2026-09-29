@@ -1,17 +1,26 @@
 const mongoose = require('mongoose');
+const userModel = require('../models/user');
 const Review = require('../models/review');
 const Product = require('../models/product');
 const AppError = require('../utils/appError');
 const sendSuccess = require('../utils/response');
 const formatReview = require('../utils/formatReview');
+const { resolveUserModel } = require('../utils/modelCompat');
+
+const User = resolveUserModel(userModel);
 
 const recalculateProductRating = async (productId) => {
   const productObjectId = mongoose.Types.ObjectId.isValid(productId)
     ? new mongoose.Types.ObjectId(productId)
     : productId;
+  const activeCustomerIds = await User.find({
+    role: 'customer',
+    isActive: true,
+    deletedAt: null,
+  }).distinct('_id');
 
   const stats = await Review.aggregate([
-    { $match: { product: productObjectId } },
+    { $match: { product: productObjectId, user: { $in: activeCustomerIds } } },
     {
       $group: {
         _id: '$product',
@@ -39,6 +48,16 @@ exports.createReview = async (req, res, next) => {
     return next(new AppError('Product not found', 404));
   }
 
+  const productVendor = await User.findOne({
+    _id: product.vendor,
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  });
+  if (!productVendor) {
+    return next(new AppError('Product not found', 404));
+  }
+
   const existingReview = await Review.findOne({ product: productId, user: req.user.id });
   if (existingReview) {
     return next(new AppError('You have already reviewed this product', 400));
@@ -57,7 +76,31 @@ exports.createReview = async (req, res, next) => {
 };
 
 exports.getProductReviews = async (req, res, next) => {
-  const reviews = await Review.find({ product: req.params.productId })
+  const product = await Product.findById(req.params.productId);
+  if (!product || !product.isActive) {
+    return next(new AppError('Product not found', 404));
+  }
+
+  const productVendor = await User.findOne({
+    _id: product.vendor,
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  });
+  if (!productVendor) {
+    return next(new AppError('Product not found', 404));
+  }
+
+  const activeCustomerIds = await User.find({
+    role: 'customer',
+    isActive: true,
+    deletedAt: null,
+  }).distinct('_id');
+
+  const reviews = await Review.find({
+    product: req.params.productId,
+    user: { $in: activeCustomerIds },
+  })
     .sort({ createdAt: -1 })
     .populate('user', 'name');
 

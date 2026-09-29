@@ -97,7 +97,11 @@ exports.getProducts = async (req, res, next) => {
 
   const filter = { isActive: true };
 
-  const activeVendorIds = await User.find({ role: 'vendor', isActive: true }).distinct('_id');
+  const activeVendorIds = await User.find({
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  }).distinct('_id');
   if (activeVendorIds.length === 0) {
     return sendSuccess(res, 200, 'Products fetched successfully', {
       products: [],
@@ -112,8 +116,13 @@ exports.getProducts = async (req, res, next) => {
 
   if (category) filter.category = category;
   if (vendor) {
-    const vendorUser = await User.findById(vendor);
-    if (!vendorUser || !vendorUser.isActive) {
+    const vendorUser = await User.findOne({
+      _id: vendor,
+      role: 'vendor',
+      isActive: true,
+      deletedAt: null,
+    });
+    if (!vendorUser) {
       return sendSuccess(res, 200, 'Products fetched successfully', {
         products: [],
         pagination: {
@@ -180,15 +189,27 @@ exports.getProduct = async (req, res, next) => {
     return next(new AppError('Product not found', 404));
   }
 
-  const productVendor = await User.findById(product.vendor);
-  if (!productVendor || !productVendor.isActive) {
+  const productVendor = await User.findOne({
+    _id: product.vendor,
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  });
+  if (!productVendor) {
     return next(new AppError('Product not found', 404));
   }
+
+  const activeVendorIds = await User.find({
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  }).distinct('_id');
 
   const relatedProducts = await Product.find({
     category: product.category,
     _id: { $ne: product._id },
     isActive: true,
+    vendor: { $in: activeVendorIds },
   })
     .limit(4)
     .populate('category', 'name');

@@ -35,8 +35,13 @@ exports.getShop = async (req, res, next) => {
     return next(new AppError('Shop not found', 404));
   }
 
-  const shopOwner = await User.findById(shop.owner);
-  if (!shopOwner || !shopOwner.isActive) {
+  const shopOwner = await User.findOne({
+    _id: shop.owner,
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  });
+  if (!shopOwner) {
     return next(new AppError('Shop not found', 404));
   }
 
@@ -52,8 +57,13 @@ exports.getShopByVendorId = async (req, res, next) => {
     return next(new AppError('Shop not found', 404));
   }
 
-  const shopOwner = await User.findById(shop.owner);
-  if (!shopOwner || !shopOwner.isActive) {
+  const shopOwner = await User.findOne({
+    _id: shop.owner,
+    role: 'vendor',
+    isActive: true,
+    deletedAt: null,
+  });
+  if (!shopOwner) {
     return next(new AppError('Shop not found', 404));
   }
 

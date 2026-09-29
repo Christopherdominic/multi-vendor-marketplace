@@ -76,13 +76,20 @@ exports.updateVendorStatus = async (req, res, next) => {
     return next(new AppError('Vendor not found', 404));
   }
 
+  if (isActive) {
+    const persistedVendor = await SafeUser.collection.findOne(
+      { _id: vendor._id },
+      { projection: { deletedAt: 1 } }
+    );
+    if (persistedVendor?.deletedAt) {
+      return next(new AppError('Permanently deleted vendors cannot be reactivated', 400));
+    }
+  }
+
   vendor.isActive = isActive;
   await vendor.save();
 
-  await Promise.all([
-    Shop.findOneAndUpdate({ owner: vendor.id }, { isActive }),
-    Product.updateMany({ vendor: vendor.id }, { isActive }),
-  ]);
+  await Shop.findOneAndUpdate({ owner: vendor.id }, { isActive });
 
   sendSuccess(res, 200, `Vendor ${isActive ? 'activated' : 'deactivated'} successfully`, {
     id: vendor.id,
