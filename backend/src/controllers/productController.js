@@ -7,6 +7,7 @@ const uploadBufferToCloudinary = require('../utils/uploadToCloudinary');
 const deleteFromCloudinary = require('../utils/deleteFromCloudinary');
 const { formatProductSummary, formatProductDetail } = require('../utils/formatProduct');
 const { resolveUserModel } = require('../utils/modelCompat');
+const { getProductPagination, getEmptyProductResult } = require('../utils/productPagination');
 
 const User = resolveUserModel(userModel);
 
@@ -94,6 +95,7 @@ exports.createProduct = async (req, res, next) => {
 
 exports.getProducts = async (req, res, next) => {
   const { category, minPrice, maxPrice, minRating, inStock, search, sort, vendor } = req.query;
+  const { page, limit, skip } = getProductPagination(req.query);
 
   const filter = { isActive: true };
 
@@ -103,15 +105,12 @@ exports.getProducts = async (req, res, next) => {
     deletedAt: null,
   }).distinct('_id');
   if (activeVendorIds.length === 0) {
-    return sendSuccess(res, 200, 'Products fetched successfully', {
-      products: [],
-      pagination: {
-        total: 0,
-        page: 1,
-        pages: 1,
-        limit: 12,
-      },
-    });
+    return sendSuccess(
+      res,
+      200,
+      'Products fetched successfully',
+      getEmptyProductResult({ page, limit })
+    );
   }
 
   if (category) filter.category = category;
@@ -123,15 +122,12 @@ exports.getProducts = async (req, res, next) => {
       deletedAt: null,
     });
     if (!vendorUser) {
-      return sendSuccess(res, 200, 'Products fetched successfully', {
-        products: [],
-        pagination: {
-          total: 0,
-          page: 1,
-          pages: 1,
-          limit: 12,
-        },
-      });
+      return sendSuccess(
+        res,
+        200,
+        'Products fetched successfully',
+        getEmptyProductResult({ page, limit })
+      );
     }
     filter.vendor = vendor;
   } else {
@@ -162,9 +158,6 @@ exports.getProducts = async (req, res, next) => {
   }
 
   const sortBy = SORT_OPTIONS[sort] || SORT_OPTIONS.newest;
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
-  const skip = (page - 1) * limit;
 
   const [products, total] = await Promise.all([
     Product.find(filter).sort(sortBy).skip(skip).limit(limit).populate('category', 'name'),

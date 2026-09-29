@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Multi-vendor Marketplace API — Backend Dev 4</title>
+  <style>
+    @page { size: A4; margin: 17mm 16mm 18mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172033; font: 10pt/1.48 Arial, Helvetica, sans-serif; }
+    h1, h2, h3 { color: #14213d; line-height: 1.2; }
+    h1 { font-size: 28pt; margin: 0 0 8px; }
+    h2 { font-size: 18pt; margin: 28px 0 10px; border-bottom: 2px solid #e7edf5; padding-bottom: 6px; }
+    h3 { font-size: 12pt; margin: 20px 0 7px; }
+    p { margin: 6px 0 10px; }
+    a { color: #2456a6; }
+    .cover { min-height: 250mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
+    .eyebrow { color: #2a6f97; font-size: 10pt; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+    .subtitle { color: #52627a; font-size: 15pt; max-width: 520px; }
+    .cover-card { margin-top: 30px; padding: 18px 20px; background: #f3f7fb; border-left: 4px solid #2a6f97; }
+    .meta { color: #52627a; margin-top: 28px; }
+    .toc { background: #f7f9fc; border: 1px solid #e5ebf2; border-radius: 8px; padding: 14px 20px; }
+    .toc ol { margin: 6px 0 0; padding-left: 20px; columns: 2; }
+    .route { margin: 15px 0 20px; padding: 0 0 8px; break-inside: avoid; }
+    .verb { display: inline-block; min-width: 58px; padding: 3px 7px; border-radius: 4px; color: white; font-weight: bold; text-align: center; font-size: 8pt; }
+    .get { background: #16825d; } .post { background: #2468b4; } .patch { background: #a05a00; } .put { background: #6941a5; } .delete { background: #b83b42; }
+    .path { font: bold 11pt/1.5 Consolas, 'Courier New', monospace; margin-left: 7px; }
+    .tag { display: inline-block; margin-left: 5px; color: #56647a; font-size: 8pt; }
+    code, pre { font-family: Consolas, 'Courier New', monospace; }
+    code { font-size: 9pt; color: #163d73; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 12px; background: #f3f5f8; border: 1px solid #e3e8ef; border-radius: 5px; font-size: 8pt; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; }
+    th, td { border: 1px solid #dfe6ee; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #f0f4f8; }
+    .note { padding: 10px 12px; background: #fff8e8; border-left: 4px solid #e3a52f; margin: 10px 0; }
+    .info { padding: 10px 12px; background: #edf7f2; border-left: 4px solid #29936c; margin: 10px 0; }
+    .small { color: #59677a; font-size: 8.5pt; }
+    .page-break { page-break-before: always; }
+    .footer { color: #778398; font-size: 8pt; margin-top: 24px; border-top: 1px solid #e4e9ef; padding-top: 7px; }
+    ul { margin: 5px 0 10px; padding-left: 21px; }
+    li { margin: 2px 0; }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="eyebrow">Multi-vendor Marketplace · API Reference</div>
+    <h1>Backend Dev 4<br>Shop, Address, Review &amp; Admin APIs</h1>
+    <p class="subtitle">Detailed endpoint documentation for the marketplace’s shop profiles, customer addresses, product reviews, vendor administration, and related product/catalog endpoints.</p>
+    <div class="cover-card">
+      <strong>Base URL</strong><br><code>http://localhost:5000/api/v1</code><br><br>
+      <strong>API prefix</strong><br><code>/api/v1</code><br><br>
+      <strong>Document version</strong><br>1.0 · 29 September 2026
+    </div>
+    <p class="meta">Prepared for PR #14 review · Backend implementation reference</p>
+  </section>
+
+  <h2>1. Scope and conventions</h2>
+  <p>This document describes the routes mounted by the backend app for shops, addresses, reviews, admin operations, products, and categories. The authentication service is owned by Backend Dev 1 / Queen and is not mounted in this app snapshot; protected routes expect a valid bearer token from that service.</p>
+  <div class="toc"><strong>Contents</strong><ol>
+    <li>Conventions and authorization</li><li>Standard responses and errors</li><li>Shops</li><li>Addresses</li><li>Reviews</li><li>Admin</li><li>Products</li><li>Categories</li><li>Lifecycle and soft-delete behavior</li><li>End-to-end examples</li>
+  </ol></div>
+  <h3>Request conventions</h3>
+  <ul>
+    <li>JSON endpoints use <code>Content-Type: application/json</code>.</li>
+    <li>Product image create/update endpoints use <code>multipart/form-data</code>, with image field name <code>images</code>.</li>
+    <li>MongoDB identifiers are 24-character ObjectId strings.</li>
+    <li>Protected requests send <code>Authorization: Bearer &lt;access-token&gt;</code>.</li>
+    <li>Query pagination is one-based. Product list defaults to page 1 and limit 12; admin lists default to page 1 and limit 20.</li>
+  </ul>
+  <h3>Authorization summary</h3>
+  <table><thead><tr><th>Role</th><th>Allowed operations</th></tr></thead><tbody>
+    <tr><td>Public</td><td>Read active shops, active products, categories, and visible product reviews.</td></tr>
+    <tr><td>Customer</td><td>Manage own addresses; create reviews; delete own reviews.</td></tr>
+    <tr><td>Vendor</td><td>Register/update own shop; read own shop dashboard; create/update/soft-delete own products.</td></tr>
+    <tr><td>Admin</td><td>List vendors/customers, change vendor active status, view analytics, create categories, delete any review.</td></tr>
+  </tbody></table>
+  <div class="note"><strong>Auth integration:</strong> Exact token issuance, refresh, password, and account self-deactivation/deletion endpoints are defined by the auth owner. Protected route behavior requires <code>req.user.id</code> and <code>req.user.role</code>.</div>
+
+  <h2>2. Response envelope and errors</h2>
+  <p>All successful controller responses use this envelope:</p>
+  <pre>{
+  "success": true,
+  "message": "Resource fetched successfully",
+  "data": { }
+}</pre>
+  <p>Errors use the same stable top-level fields:</p>
+  <pre>{
+  "success": false,
+  "message": "A useful error description",
+  "data": null
+}</pre>
+  <table><thead><tr><th>Status</th><th>Typical cause</th></tr></thead><tbody>
+    <tr><td>200</td><td>Successful read/update/delete.</td></tr><tr><td>201</td><td>Resource created.</td></tr><tr><td>400</td><td>Validation, invalid ObjectId, duplicate key, malformed input.</td></tr><tr><td>401</td><td>Missing, invalid, or expired bearer token.</td></tr><tr><td>403</td><td>Authenticated role or ownership not authorized.</td></tr><tr><td>404</td><td>Resource absent, inactive, or not publicly available.</td></tr><tr><td>500</td><td>Unexpected server error.</td></tr>
+  </tbody></table>
+
+  <h2>3. Shop APIs</h2>
+  <div class="route"><span class="verb post">POST</span><span class="path">/shops</span><span class="tag">Vendor only · protected</span>
+    <p>Register one shop for the authenticated vendor. One shop per owner is enforced.</p>
+    <table><tr><th>Body field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>name</code></td><td>string</td><td>yes</td><td>Trimmed, non-empty; maximum 100 characters.</td></tr><tr><td><code>description</code></td><td>string</td><td>no</td><td>Defaults to an empty string.</td></tr><tr><td><code>logo</code></td><td>URL string</td><td>no</td><td>Optional logo URL.</td></tr><tr><td><code>contactEmail</code></td><td>string</td><td>no</td><td>Contact address.</td></tr><tr><td><code>contactPhone</code></td><td>string</td><td>no</td><td>Contact number.</td></tr></table>
+    <pre>{ "name": "North Star Goods", "description": "Home and lifestyle products", "logo": "https://cdn.example.test/shop.png", "contactEmail": "hello@example.test", "contactPhone": "+2348000000000" }</pre>
+    <p><strong>Success:</strong> 201; returns shop fields including <code>id</code>, <code>ownerId</code>, <code>isActive</code>, and <code>createdAt</code>. 400 if vendor already has a shop.</p>
+  </div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/shops/:id</span><span class="tag">Public</span><p>Fetch an active shop by shop ID. The owning vendor must also be active and not soft-deleted. Response includes <code>productCount</code>. Returns 404 for unavailable shops.</p></div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/shops/vendor/:vendorId</span><span class="tag">Public</span><p>Fetch a shop by the vendor’s User ObjectId. Use this with <code>GET /products?vendor=:vendorId</code> to build a vendor storefront; there is no separate vendor-products endpoint.</p></div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/shops/me/dashboard</span><span class="tag">Vendor only · protected</span><p>Returns the vendor’s shop, <code>totalProducts</code>, and <code>activeProducts</code>. <code>totalOrders</code> and <code>totalSales</code> are currently <code>null</code> until the orders domain is integrated.</p></div>
+  <div class="route"><span class="verb patch">PATCH</span><span class="path">/shops/me</span><span class="tag">Vendor only · protected</span><p>Partially update own shop. Allowed fields: <code>name</code>, <code>description</code>, <code>logo</code>, <code>contactEmail</code>, <code>contactPhone</code>. Submitted name/phone must not be empty; logo and email are validated when supplied. Returns 404 if no shop exists.</p></div>
+
+  <h2>4. Address APIs</h2>
+  <p>Address records reference the base user through <code>user</code>; multiple addresses per customer are supported. Customer shipping addresses currently require structured fields.</p>
+  <div class="route"><span class="verb post">POST</span><span class="path">/addresses</span><span class="tag">Customer only · protected</span>
+    <p>Create an address belonging to the authenticated customer.</p>
+    <table><tr><th>Field</th><th>Type</th><th>Required</th><th>Notes</th></tr><tr><td><code>fullName</code></td><td>string</td><td>yes</td><td>Recipient name.</td></tr><tr><td><code>phone</code></td><td>string</td><td>yes</td><td>Recipient phone.</td></tr><tr><td><code>street</code></td><td>string</td><td>yes</td><td>Street / delivery details.</td></tr><tr><td><code>city</code></td><td>string</td><td>yes</td><td>City.</td></tr><tr><td><code>state</code></td><td>string</td><td>yes</td><td>State or region.</td></tr><tr><td><code>country</code></td><td>string</td><td>no</td><td>Defaults to Nigeria.</td></tr><tr><td><code>isDefault</code></td><td>boolean</td><td>no</td><td>Defaults false; setting true clears other defaults for this user.</td></tr></table>
+    <pre>{ "fullName": "Ada Customer", "phone": "+2348000000000", "street": "12 Market Road", "city": "Lagos", "state": "Lagos", "country": "Nigeria", "isDefault": true }</pre>
+  </div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/addresses</span><span class="tag">Customer only · protected</span><p>List only the authenticated customer’s addresses, ordered with default address first, then newest first.</p></div>
+  <div class="route"><span class="verb patch">PATCH</span><span class="path">/addresses/:id</span><span class="tag">Customer only · protected</span><p>Update any subset of address fields. Supplied text fields must be non-empty where required; <code>isDefault</code> must be boolean. A true default clears the other defaults after this address saves successfully.</p></div>
+  <div class="route"><span class="verb delete">DELETE</span><span class="path">/addresses/:id</span><span class="tag">Customer only · protected</span><p>Delete an address owned by the authenticated customer. Returns 404 when not found or not owned by caller.</p></div>
+  <div class="note"><strong>Address ownership:</strong> The current Address schema requires <code>fullName</code>, <code>phone</code>, <code>street</code>, <code>city</code>, and <code>state</code>. User self-deletion/address-retention integration belongs to the auth lifecycle and is not an address route in this API.</div>
+
+  <h2>5. Review APIs</h2>
+  <div class="route"><span class="verb post">POST</span><span class="path">/reviews</span><span class="tag">Customer only · protected</span>
+    <p>Create one review per customer per product. Product and vendor must be active and available. Verified-purchase enforcement is deferred until the orders API is integrated.</p>
+    <pre>{ "product": "64f000000000000000000001", "rating": 5, "comment": "Excellent product." }</pre>
+    <p><code>product</code> is a required Mongo ID; <code>rating</code> is an integer 1–5; <code>comment</code> is optional. Returns 201; duplicate user/product review returns 400.</p>
+  </div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/reviews/product/:productId</span><span class="tag">Public</span><p>List reviews newest first for an active product with an active vendor. Reviews authored by inactive or soft-deleted customers are not publicly returned. User data is limited to ID and display name.</p></div>
+  <div class="route"><span class="verb delete">DELETE</span><span class="path">/reviews/:id</span><span class="tag">Protected · owner or admin</span><p>Delete own review, or any review as admin. Product average and count are recalculated. Returns 403 when the caller does not own the review and is not admin.</p></div>
+  <div class="info"><strong>Rating behavior:</strong> Ratings are recalculated from reviews belonging to active, non-deleted customers. Empty review sets produce average <code>0</code> and count <code>0</code>.</div>
+
+  <h2>6. Admin APIs</h2>
+  <p>Every <code>/admin</code> route requires a valid bearer token with role <code>admin</code>.</p>
+  <div class="route"><span class="verb get">GET</span><span class="path">/admin/vendors?page=1&amp;limit=20&amp;status=active</span><span class="tag">Admin</span><p>List vendors with shop summary. Query: page (positive integer), limit (1–50), status (<code>active</code> or <code>inactive</code>; omitted for all). Results are newest first and include pagination metadata.</p></div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/admin/customers?page=1&amp;limit=20</span><span class="tag">Admin</span><p>List customers with basic profile and active status. Supports page and limit; newest first.</p></div>
+  <div class="route"><span class="verb patch">PATCH</span><span class="path">/admin/vendors/:id/status</span><span class="tag">Admin</span><p>Activate or deactivate a vendor; body requires a boolean <code>isActive</code>. Vendor status and shop status are synchronized. Product-specific active state is preserved. Vendors with non-null <code>deletedAt</code> cannot be reactivated.</p>
+    <pre>{ "isActive": false }</pre>
+    <p>Returns 400 for attempts to reactivate a permanently soft-deleted vendor; 404 for an unknown/non-vendor ID.</p>
+  </div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/admin/analytics</span><span class="tag">Admin</span><p>Returns counts for users, vendors, customers, shops, and active products. <code>totalRevenue</code> and <code>topVendors</code> are currently null pending orders integration.</p></div>
+
+  <h2>7. Product APIs (storefront integration)</h2>
+  <div class="route"><span class="verb get">GET</span><span class="path">/products</span><span class="tag">Public</span>
+    <p>List active products belonging to active, non-deleted vendors. Supports vendor storefront filtering; no duplicate vendor-products route is provided.</p>
+    <table><tr><th>Query</th><th>Type / constraints</th><th>Default</th></tr><tr><td><code>category</code></td><td>Mongo ID</td><td>none</td></tr><tr><td><code>vendor</code></td><td>Mongo ID</td><td>none</td></tr><tr><td><code>minPrice</code>, <code>maxPrice</code></td><td>number ≥ 0</td><td>none</td></tr><tr><td><code>minRating</code></td><td>number 0–5</td><td>none</td></tr><tr><td><code>search</code></td><td>string up to 100 chars</td><td>none</td></tr><tr><td><code>inStock</code></td><td>boolean string; true filters stock &gt; 0</td><td>false</td></tr><tr><td><code>sort</code></td><td><code>newest</code>, <code>price_asc</code>, <code>price_desc</code>, <code>rating</code></td><td><code>newest</code></td></tr><tr><td><code>page</code></td><td>integer ≥ 1</td><td>1</td></tr><tr><td><code>limit</code></td><td>integer 1–50</td><td>12</td></tr></table>
+    <p>Response data contains <code>products</code> summaries and <code>pagination</code> (<code>total</code>, <code>page</code>, <code>pages</code>, <code>limit</code>). Empty results retain the requested page and limit.</p>
+  </div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/products/:id</span><span class="tag">Public</span><p>Fetch active product details plus up to four related products. Product’s vendor must be active and not soft-deleted. Returns 404 when unavailable.</p></div>
+  <div class="route"><span class="verb post">POST</span><span class="path">/products</span><span class="tag">Vendor only · protected · multipart</span><p>Create product with required name, description, nonnegative price/stock, category ObjectId, and at least one image. Upload field is <code>images</code>, maximum five image files, 5 MB per file. Non-image MIME types are rejected. Image storage is handled by Cloudinary.</p></div>
+  <div class="route"><span class="verb put">PUT</span><span class="path">/products/:id</span><span class="tag">Owner vendor · protected</span><p>Update own active product fields and optionally replace images. Product updates do not permit changing vendor ownership. Replacement upload cleanup is failure-aware.</p></div>
+  <div class="route"><span class="verb delete">DELETE</span><span class="path">/products/:id</span><span class="tag">Owner vendor · protected</span><p>Soft-delete own product by setting <code>isActive=false</code>; historical references remain intact. Reactivating its vendor does not reactivate this product.</p></div>
+
+  <h2>8. Category APIs</h2>
+  <div class="route"><span class="verb get">GET</span><span class="path">/categories</span><span class="tag">Public</span><p>List categories alphabetically with count of active products for each category.</p></div>
+  <div class="route"><span class="verb post">POST</span><span class="path">/categories</span><span class="tag">Admin · protected</span><p>Create a category. Required <code>name</code>; optional <code>icon</code> and <code>description</code>. Duplicate category names return 400.</p></div>
+
+  <h2>9. Lifecycle rules and integration notes</h2>
+  <ul>
+    <li><strong>Deactivation:</strong> set <code>isActive=false</code>; keep <code>deletedAt=null</code>. Account and related records can be reactivated according to core auth policy.</li>
+    <li><strong>Permanent soft deletion:</strong> set <code>isActive=false</code> and a non-null <code>deletedAt</code>. Public shop/product/review queries exclude such users. Admin vendor activation rejects a non-null <code>deletedAt</code>.</li>
+    <li>Shop and product records are not physically removed by vendor status changes. Product-specific <code>isActive</code> is preserved to avoid republishing previously deleted listings.</li>
+    <li>Orders are outside this section and are not mutated by vendor status changes.</li>
+    <li>Queen / Backend Dev 1 owns the shared User discriminator schema, account lifecycle endpoints, and auth middleware. This API assumes persisted <code>deletedAt</code> on that model.</li>
+    <li>MongoDB integration regression test: set <code>TEST_MONGODB_URI</code> and run <code>npm test</code>. Without that variable, the integration case is explicitly skipped; pagination and compatibility tests run locally without MongoDB.</li>
+  </ul>
+
+  <h2>10. Example storefront flow</h2>
+  <p>Fetch vendor shop profile, then fetch that vendor’s products:</p>
+  <pre>GET /api/v1/shops/vendor/64f000000000000000000001
+GET /api/v1/products?vendor=64f000000000000000000001&amp;page=2&amp;limit=8</pre>
+  <p>Example product-list data:</p>
+  <pre>{
+  "success": true,
+  "message": "Products fetched successfully",
+  "data": {
+    "products": [
+      {
+        "id": "64f000000000000000000010",
+        "name": "Everyday Tote",
+        "price": 8500,
+        "image": "https://cdn.example.test/tote.jpg",
+        "category": "Accessories",
+        "categoryId": "64f000000000000000000020",
+        "vendorId": "64f000000000000000000001",
+        "inStock": true,
+        "rating": 4.5,
+        "reviewCount": 8
+      }
+    ],
+    "pagination": { "total": 17, "page": 2, "pages": 3, "limit": 8 }
+  }
+}</pre>
+  <p class="footer">Multi-vendor Marketplace API · Backend Dev 4 · Version 1.0 · 29 September 2026</p>
+</body>
+</html>
