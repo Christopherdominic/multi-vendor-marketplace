@@ -21,7 +21,9 @@ router.patch(
   '/vendors/:id/status',
   [
     param('id').isMongoId().withMessage('Invalid vendor id'),
-    body('isActive').isBoolean().withMessage('isActive must be true or false'),
+      body('isActive')
+        .isBoolean({ strict: true })
+        .withMessage('isActive must be a JSON boolean'),
   ],
   validate,
   updateVendorStatus

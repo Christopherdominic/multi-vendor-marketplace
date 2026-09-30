@@ -135,6 +135,8 @@
     <p>Returns 400 for attempts to reactivate a permanently soft-deleted vendor; 404 for an unknown/non-vendor ID.</p>
   </div>
   <div class="route"><span class="verb get">GET</span><span class="path">/admin/analytics</span><span class="tag">Admin</span><p>Returns counts for users, vendors, customers, shops, and active products. <code>totalRevenue</code> and <code>topVendors</code> are currently null pending orders integration.</p></div>
+  <div class="route"><span class="verb get">GET</span><span class="path">/admin/analytics</span><span class="tag">Admin</span><p>Returns counts for users, vendors, customers, shops, and publicly visible products. <code>totalProducts</code> includes products whose own <code>isActive</code> flag is true and whose vendor is active and not soft-deleted, matching category counts and storefront visibility. <code>totalRevenue</code> and <code>topVendors</code> are currently null pending orders integration.</p></div>
+  <div class="route"><span class="verb patch">PATCH</span><span class="path">/admin/vendors/:id/status</span><span class="tag">Admin</span><p>Activate or deactivate a vendor; body requires a JSON boolean <code>isActive</code> (the string values <code>"true"</code> and <code>"false"</code> are rejected). Vendor status and shop status are synchronized. Product-specific active state is preserved. Vendors with non-null <code>deletedAt</code> cannot be reactivated.</p>
 
   <h2>7. Product APIs (storefront integration)</h2>
   <div class="route"><span class="verb get">GET</span><span class="path">/products</span><span class="tag">Public</span>

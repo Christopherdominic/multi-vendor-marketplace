@@ -71,6 +71,10 @@ exports.getCustomers = async (req, res, next) => {
 exports.updateVendorStatus = async (req, res, next) => {
   const { isActive } = req.body;
 
+  if (typeof isActive !== 'boolean') {
+    return next(new AppError('isActive must be a JSON boolean', 400));
+  }
+
   const vendor = await SafeUser.findOne({ _id: req.params.id, role: 'vendor' });
   if (!vendor) {
     return next(new AppError('Vendor not found', 404));
@@ -98,13 +102,17 @@ exports.updateVendorStatus = async (req, res, next) => {
 };
 
 exports.getAnalytics = async (req, res, next) => {
-  const [totalUsers, totalVendors, totalCustomers, totalShops, totalProducts] = await Promise.all([
+  const [totalUsers, totalVendors, totalCustomers, totalShops, activeVendorIds] = await Promise.all([
     SafeUser.countDocuments(),
     SafeUser.countDocuments({ role: 'vendor' }),
     SafeUser.countDocuments({ role: 'customer' }),
     Shop.countDocuments(),
-    Product.countDocuments({ isActive: true }),
+    SafeUser.find({ role: 'vendor', isActive: true, deletedAt: null }).distinct('_id'),
   ]);
+  const totalProducts = await Product.countDocuments({
+    isActive: true,
+    vendor: { $in: activeVendorIds },
+  });
 
   sendSuccess(res, 200, 'Platform analytics fetched successfully', {
     totalUsers,

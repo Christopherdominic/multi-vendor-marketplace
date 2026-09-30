@@ -71,6 +71,17 @@ test(
       return response;
     };
 
+    let validationError;
+    await updateVendorStatus(
+      { body: { isActive: 'false' }, params: { id: vendor.id } },
+      {},
+      (error) => {
+        validationError = error;
+      }
+    );
+    assert.equal(validationError.statusCode, 400);
+    assert.equal((await User.findById(vendor._id)).isActive, true);
+
     await invokeUpdateVendorStatus(false);
     assert.equal((await User.findById(vendor._id)).isActive, false);
     assert.equal((await Shop.findById(shop._id)).isActive, false);
@@ -80,6 +91,84 @@ test(
     assert.equal((await User.findById(vendor._id)).isActive, true);
     assert.equal((await Shop.findById(shop._id)).isActive, true);
     assert.equal((await Product.findById(product._id)).isActive, false);
+  }
+);
+
+test(
+  'admin totalProducts counts active listings only for active non-deleted vendors',
+  { skip: !testMongoUri && 'Set TEST_MONGODB_URI to run the MongoDB integration test' },
+  async (t) => {
+    await mongoose.connect(testMongoUri);
+    const unique = new mongoose.Types.ObjectId().toString();
+    const vendors = [];
+    const products = [];
+    let category;
+
+    t.after(async () => {
+      if (products.length) await Product.deleteMany({ _id: { $in: products.map(({ _id }) => _id) } });
+      if (category) await Category.deleteOne({ _id: category._id });
+      if (vendors.length) await User.deleteMany({ _id: { $in: vendors.map(({ _id }) => _id) } });
+      await mongoose.disconnect();
+    });
+
+    const activeVendorIds = await User.find({
+      role: 'vendor',
+      isActive: true,
+      deletedAt: null,
+    }).distinct('_id');
+    const baselineVisibleProducts = await Product.countDocuments({
+      isActive: true,
+      vendor: { $in: activeVendorIds },
+    });
+
+    category = await Category.create({ name: `Analytics Regression ${unique}` });
+    for (const [label, isActive] of [
+      ['active', true],
+      ['inactive', false],
+      ['deleted', false],
+    ]) {
+      const vendor = await User.create({
+        name: `${label} analytics vendor`,
+        email: `${label}-analytics-${unique}@example.test`,
+        password: 'test-password',
+        role: 'vendor',
+        isActive,
+      });
+      vendors.push(vendor);
+      products.push(await Product.create({
+        name: `${label} analytics product`,
+        description: 'Analytics visibility fixture.',
+        price: 12,
+        stock: 2,
+        category: category._id,
+        vendor: vendor._id,
+        isActive: true,
+      }));
+      if (label === 'deleted') {
+        await User.collection.updateOne(
+          { _id: vendor._id },
+          { $set: { deletedAt: new Date() } }
+        );
+      }
+    }
+
+    let response;
+    const res = {
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        response = body;
+        return body;
+      },
+    };
+
+    await require('../src/controllers/adminController').getAnalytics({}, res, (error) => {
+      if (error) throw error;
+    });
+
+    assert.equal(response.data.totalProducts, baselineVisibleProducts + 1);
   }
 );
 
