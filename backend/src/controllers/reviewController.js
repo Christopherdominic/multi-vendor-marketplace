@@ -20,7 +20,13 @@ const recalculateProductRating = async (productId) => {
   }).distinct('_id');
 
   const stats = await Review.aggregate([
-    { $match: { product: productObjectId, user: { $in: activeCustomerIds } } },
+    {
+      $match: {
+        product: productObjectId,
+        isActive: true,
+        user: { $in: activeCustomerIds },
+      },
+    },
     {
       $group: {
         _id: '$product',
@@ -99,6 +105,7 @@ exports.getProductReviews = async (req, res, next) => {
 
   const reviews = await Review.find({
     product: req.params.productId,
+    isActive: true,
     user: { $in: activeCustomerIds },
   })
     .sort({ createdAt: -1 })

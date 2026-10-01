@@ -27,7 +27,8 @@ exports.createAddress = async (req, res, next) => {
 };
 
 exports.getMyAddresses = async (req, res, next) => {
-  const addresses = await Address.find({ user: req.user.id }).sort({ isDefault: -1, createdAt: -1 });
+  const addresses = await Address.find({ user: req.user.id, isActive: true })
+    .sort({ isDefault: -1, createdAt: -1 });
   sendSuccess(res, 200, 'Addresses fetched successfully', addresses.map(formatAddress));
 };
 
