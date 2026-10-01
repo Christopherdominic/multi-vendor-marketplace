@@ -20,7 +20,13 @@ router.post(
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').trim().isEmail().withMessage('A valid email is required'),
     body('phoneNumber').trim().notEmpty().withMessage('Phone number is required'),
-    body('password').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('password')
+      .isString()
+      .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+      .matches(/[a-z]/).withMessage('Password must contain a lowercase letter')
+      .matches(/[A-Z]/).withMessage('Password must contain an uppercase letter')
+      .matches(/[0-9]/).withMessage('Password must contain a number')
+      .matches(/[^a-zA-Z0-9]/).withMessage('Password must contain a special character'),
   ],
   validate,
   createAdmin

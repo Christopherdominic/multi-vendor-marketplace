@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const mongoose = require('mongoose');
-const User = require('../src/models/user');
+const userModel = require('../src/models/user');
+const User = userModel.User || userModel;
+const Vendor = userModel.Vendor;
 const Category = require('../src/models/category');
 const Product = require('../src/models/product');
 const Shop = require('../src/models/shop');
@@ -9,6 +11,11 @@ const { updateVendorStatus } = require('../src/controllers/adminController');
 const { getProducts } = require('../src/controllers/productController');
 
 const testMongoUri = process.env.TEST_MONGODB_URI;
+const createVendor = (data) => {
+  if (!Vendor) return User.create(data);
+  const { role, ...vendorData } = data;
+  return Vendor.create(vendorData);
+};
 
 test(
   'vendor deactivate/reactivate preserves a soft-deleted product state',
@@ -29,11 +36,14 @@ test(
       await mongoose.disconnect();
     });
 
-    vendor = await User.create({
+    vendor = await createVendor({
       name: 'Status Regression Vendor',
       email: `vendor-status-${unique}@example.test`,
+      phoneNumber: '08012345678',
       password: 'test-password',
       role: 'vendor',
+      businessName: 'Status Regression Shop',
+      businessDescription: 'Vendor fixture for status regression.',
       isActive: true,
     });
     category = await Category.create({ name: `Status Regression ${unique}` });
@@ -127,11 +137,14 @@ test(
       ['inactive', false],
       ['deleted', false],
     ]) {
-      const vendor = await User.create({
+      const vendor = await createVendor({
         name: `${label} analytics vendor`,
         email: `${label}-analytics-${unique}@example.test`,
+        phoneNumber: `0801234567${vendors.length}`,
         password: 'test-password',
         role: 'vendor',
+        businessName: `${label} analytics shop`,
+        businessDescription: 'Vendor fixture for analytics regression.',
         isActive,
       });
       vendors.push(vendor);
@@ -187,11 +200,14 @@ test(
       await mongoose.disconnect();
     });
 
-    inactiveVendor = await User.create({
+    inactiveVendor = await createVendor({
       name: 'Inactive Pagination Vendor',
       email: `inactive-pagination-${unique}@example.test`,
+      phoneNumber: '08012345678',
       password: 'test-password',
       role: 'vendor',
+      businessName: 'Inactive Pagination Shop',
+      businessDescription: 'Vendor fixture for pagination regression.',
       isActive: false,
     });
 
@@ -222,11 +238,14 @@ test(
       limit: 7,
     });
 
-    activeVendor = await User.create({
+    activeVendor = await createVendor({
       name: 'Active Pagination Vendor',
       email: `active-pagination-${unique}@example.test`,
+      phoneNumber: '08087654321',
       password: 'test-password',
       role: 'vendor',
+      businessName: 'Active Pagination Shop',
+      businessDescription: 'Vendor fixture for pagination regression.',
       isActive: true,
     });
 
