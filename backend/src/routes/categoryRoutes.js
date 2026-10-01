@@ -1,8 +1,8 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { createCategory, getCategories } = require('../controllers/categoryController');
-const { protect, restrictTo } = require('../middleware/auth');
-const validate = require('../middleware/validate');
+const { protect, restrictTo } = require('../middlewares/auth');
+const validate = require('../middlewares/validate');
 
 const router = express.Router();
 
