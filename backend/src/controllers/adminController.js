@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const userModel = require('../models/user');
 const Shop = require('../models/shop');
 const Product = require('../models/product');
@@ -6,6 +7,41 @@ const sendSuccess = require('../utils/response');
 const { resolveUserModel } = require('../utils/modelCompat');
 
 const SafeUser = resolveUserModel(userModel);
+const Admin = userModel.Admin || SafeUser.discriminators?.Admin || SafeUser;
+
+exports.createAdmin = async (req, res, next) => {
+  const name = req.body.name.trim();
+  const email = req.body.email.trim().toLowerCase();
+  const phoneNumber = req.body.phoneNumber.trim();
+  const { password } = req.body;
+
+  const existingUser = await SafeUser.findOne({
+    $or: [{ email }, { phoneNumber }],
+  });
+
+  if (existingUser) {
+    const usedField = existingUser.email === email ? 'Email' : 'Phone number';
+    return next(new AppError(`An account with this ${usedField} already exists`, 409));
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const adminData = {
+    name,
+    email,
+    phoneNumber,
+    password: hashedPassword,
+  };
+
+  if (Admin === SafeUser) {
+    adminData.role = 'admin';
+  }
+
+  const admin = await Admin.create(adminData);
+  const responseAdmin = admin.toObject();
+  delete responseAdmin.password;
+
+  sendSuccess(res, 201, 'Admin created successfully', responseAdmin);
+};
 
 const paginationParams = (req) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
